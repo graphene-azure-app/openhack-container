@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mydrive-user-deployment
+  namespace: api
+  labels:
+    deploy: mydrive-user
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mydrive-user
+  template:
+    metadata:
+      labels:
+        app: mydrive-user
+    spec:
+      containers:
+      - image: "registryklg3329.azurecr.io/userprofile:1.0"
+        imagePullPolicy: Always
+        name: mydrive-user
+        livenessProbe:
+          httpGet:
+            path: /api/user/healthcheck
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /api/user/healthcheck
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        ports:
+          - containerPort: 80
+            name: http
+            protocol: TCP
+          - containerPort: 443
+            name: https
+            protocol: TCP
+        env:
+          - name: SQL_USER
+            valueFrom:
+              secretKeyRef:
+                name: tripkeys
+                key: SQL_USER
+          - name: SQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: tripkeys
+                key: SQL_PASSWORD
+          - name: SQL_SERVER
+            valueFrom:
+              secretKeyRef:
+                name: tripkeys
+                key: SQL_SERVER
+          - name: SQL_DBNAME
+            valueFrom:
+              secretKeyRef:
+                name: tripkeys
+                key: SQL_DBNAME
+        volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/mnt/secrets-store"
+          readOnly: true
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "azure-kvname"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: userprofile
+  namespace: api
+spec:
+  type: ClusterIP
+  selector:
+    app: mydrive-user
+  ports:
+    - protocol: TCP
+      name: mydrive-user-http
+      port: 80
+      targetPort: 80
+    - protocol: TCP
+      name: mydrive-user-https
+      port: 443
+      targetPort: 443
